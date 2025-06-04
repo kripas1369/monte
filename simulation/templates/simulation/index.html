@@ -18,17 +18,48 @@
             outline: none;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); /* subtle blue glow */
         }
+        .preset-btn {
+            transition: all 0.2s ease;
+        }
+        .preset-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #loading-spinner {
+            display: none;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col">
     <div class="container mx-auto px-6 py-10 flex-grow">
         <h1 class="text-4xl font-extrabold mb-8 text-center text-blue-800">3D Lattice Kinetic Monte Carlo Simulation</h1>
-        {% comment %} <h1 class="text-4xl font-extrabold mb-8 text-center text-blue-800"> Made by kripas khatiwada</h1> {% endcomment %}
 
         <!-- Graph section: show plot on top -->
         {% if plot %}
         <div class="mb-10 bg-white p-6 rounded-lg shadow-lg border border-gray-300">
             {{ plot|safe }}
+        </div>
+        {% endif %}
+
+        <!-- Simulation Metrics Dashboard -->
+        {% if metrics %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white p-4 rounded-lg shadow border border-blue-200">
+                <h3 class="font-bold text-blue-700 mb-2">System Parameters</h3>
+                <p><span class="font-semibold">Lattice:</span> {{ metrics.lattice_size }}³</p>
+                <p><span class="font-semibold">Steps:</span> {{ metrics.steps }}</p>
+                <p><span class="font-semibold">Temp:</span> {{ metrics.temperature }}K</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-green-200">
+                <h3 class="font-bold text-green-700 mb-2">Coverage</h3>
+                <p><span class="font-semibold">Species A:</span> {{ metrics.coverage_A }}</p>
+                <p><span class="font-semibold">Species B:</span> {{ metrics.coverage_B }}</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border border-purple-200">
+                <h3 class="font-bold text-purple-700 mb-2">Reactions</h3>
+                <p><span class="font-semibold">Events:</span> {{ metrics.reactions }}</p>
+                <p><span class="font-semibold">Time:</span> {{ metrics.execution_time }}</p>
+            </div>
         </div>
         {% endif %}
 
@@ -41,31 +72,104 @@
         </div>
         {% endif %}
 
-        <!-- Form section at the bottom -->
+        <!-- AI Explanation -->
+        {% if ai_explanation %}
+        <div class="bg-white shadow-md rounded p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Simulation Explanation</h2>
+            <p class="text-gray-700">{{ ai_explanation }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Form section -->
         <div class="bg-white p-8 rounded-lg shadow-lg border border-gray-300 max-w-md mx-auto">
-            <h2 class="text-2xl font-semibold mb-6 text-center text-gray-700">Enter Simulation Parameters</h2>
-            <form method="POST" novalidate>
+            <h2 class="text-2xl font-semibold mb-6 text-center text-gray-700">Simulation Control</h2>
+            
+            <!-- Preset Buttons -->
+            <div class="flex justify-between mb-6">
+                <button type="button" onclick="applyPreset('catalyst')"
+                    class="preset-btn bg-blue-100 text-blue-800 px-4 py-2 rounded-lg">
+                    Catalyst Preset
+                </button>
+                <button type="button" onclick="applyPreset('high-temp')"
+                    class="preset-btn bg-red-100 text-red-800 px-4 py-2 rounded-lg">
+                    High-Temp Preset
+                </button>
+            </div>
+            
+            <form method="POST" novalidate id="simulation-form">
                 {% csrf_token %}
                 {{ form|crispy }}
 
-                <button type="submit"
-                    class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors">
-                    Run Simulation
+                <button type="submit" id="submit-btn"
+                    class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-md transition-colors relative">
+                    <span id="btn-text">Run Simulation</span>
+                    <span id="loading-spinner" class="absolute right-4">
+                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
                 </button>
             </form>
         </div>
     </div>
 
-
     <footer class="text-center py-4 text-gray-500 text-sm">
-        &copy; 2025 Your Project Name. All rights reserved.
-        <p>Made by Kripas Khatiwada </p>
+        &copy; 2025 Advanced KMC Simulator. All rights reserved.
+        <p>Made by Kripas Khatiwada</p>
     </footer>
-    {% if ai_explanation %}
-<div class="bg-white shadow-md rounded p-6 mb-8">
-    <h2 class="text-xl font-semibold mb-4">Simulation Explanation</h2>
-    <p class="text-gray-700">{{ ai_explanation }}</p>
-</div>
-{% endif %}
+
+    <script>
+        // Apply parameter presets
+        function applyPreset(type) {
+            const form = document.getElementById('simulation-form');
+            if (type === 'catalyst') {
+                form.querySelector('#id_lattice_size').value = 20;
+                form.querySelector('#id_steps').value = 10000;
+                form.querySelector('#id_temperature').value = 300;
+            } else if (type === 'high-temp') {
+                form.querySelector('#id_lattice_size').value = 30;
+                form.querySelector('#id_steps').value = 5000;
+                form.querySelector('#id_temperature').value = 500;
+            }
+        }
+
+        // Show loading spinner during form submission
+        document.getElementById('simulation-form').addEventListener('submit', function() {
+            const btnText = document.getElementById('btn-text');
+            const spinner = document.getElementById('loading-spinner');
+            
+            btnText.textContent = 'Running...';
+            spinner.style.display = 'inline-block';
+            
+            // Disable button to prevent multiple submissions
+            this.querySelector('button[type="submit"]').disabled = true;
+        });
+
+        // Enhance number inputs with step controls
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'flex items-center mt-1';
+            input.parentNode.insertBefore(wrapper, input);
+            wrapper.appendChild(input);
+            
+            // Add step buttons
+            const stepBtns = document.createElement('div');
+            stepBtns.className = 'flex flex-col ml-2';
+            wrapper.appendChild(stepBtns);
+            
+            ['▲', '▼'].forEach((arrow, i) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = arrow;
+                btn.className = 'px-2 py-1 bg-gray-200 hover:bg-gray-300 text-sm';
+                btn.onclick = () => {
+                    const step = parseFloat(input.step) || 1;
+                    input.value = parseFloat(input.value) + (i === 0 ? step : -step);
+                };
+                stepBtns.appendChild(btn);
+            });
+        });
+    </script>
 </body>
 </html>
