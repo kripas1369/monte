@@ -1,54 +1,92 @@
 import numpy as np
 import plotly.graph_objects as go
 from django.shortcuts import render
-from django.http import JsonResponse
 from plotly.subplots import make_subplots
 import time
-from .forms import KMCSimulationForm  # Make sure you have this form defined
+from .forms import KMCSimulationForm
+
 
 def generate_lattice(size):
-    """Create a 3D lattice of given size"""
     return np.zeros((size, size, size))
 
-def simulate_kmc(size, steps, temperature):
-    """Basic KMC simulation"""
+
+def insert_impurities(lattice, impurity_concentration):
+    total_sites = np.prod(lattice.shape)
+    impurity_sites = int(total_sites * impurity_concentration)
+    indices = np.random.choice(total_sites, impurity_sites, replace=False)
+    flat_lattice = lattice.flatten()
+    flat_lattice[indices] = 2  # 2 represents impurity atoms
+    return flat_lattice.reshape(lattice.shape)
+
+
+def activation_energy(event_type, temperature):
+    base_energies = {
+        'surface_diffusion': 0.5,
+        'bulk_diffusion': 1.1,
+        'impurity_migration': 0.8,
+        'atom_hop': 0.6
+    }
+    return base_energies.get(event_type, 1.0)
+
+
+def simulate_kmc(size, steps, temperature, impurity_concentration):
     lattice = generate_lattice(size)
-    history = {'coverage': [], 'time_steps': []}
-    
+    lattice = insert_impurities(lattice, impurity_concentration)
+
+    history = {'coverage': [], 'time_steps': [], 'impurity_sites': []}
+
     for step in range(steps):
-        # Random site selection
         x, y, z = np.random.randint(0, size, 3)
-        
-        # Simple temperature-dependent probability
-        prob = 1 / (1 + np.exp(-temperature/100))
-        
-        if lattice[x, y, z] == 0 and np.random.random() < prob:
+        site = lattice[x, y, z]
+
+        if site == 0:
+            event = 'surface_diffusion'
+        elif site == 2:
+            event = 'impurity_migration'
+        else:
+            event = 'atom_hop'
+
+        Ea = activation_energy(event, temperature)
+        prob = np.exp(-Ea / (8.617e-5 * temperature))  # Boltzmann constant in eV/K
+
+        if np.random.random() < prob:
             lattice[x, y, z] = 1
-            
-        # Record every 100 steps
+
         if step % 100 == 0:
-            history['coverage'].append(np.sum(lattice == 1) / size**3)
+            coverage = np.sum(lattice == 1) / size ** 3
+            history['coverage'].append(coverage)
+            history['impurity_sites'].append(np.sum(lattice == 2))
             history['time_steps'].append(step)
-    
+
     return lattice, history
 
+
 def plot_lattice(lattice, history):
-    """Create visualization"""
-    fig = make_subplots(rows=1, cols=2,
-                       specs=[[{'type': 'scatter3d'}, {'type': 'xy'}]],
-                       subplot_titles=('3D Lattice', 'Coverage Over Time'))
-    
-    # 3D plot
+    fig = make_subplots(
+        rows=1, cols=2,
+        specs=[[{'type': 'scatter3d'}, {'type': 'xy'}]],
+        subplot_titles=('3D Lattice', 'Coverage Over Time')
+    )
+
     occupied = np.argwhere(lattice == 1)
+    impurity = np.argwhere(lattice == 2)
+
     if len(occupied) > 0:
         fig.add_trace(go.Scatter3d(
             x=occupied[:, 0], y=occupied[:, 1], z=occupied[:, 2],
             mode='markers',
             marker=dict(size=3, color='blue', opacity=0.7),
-            name='Occupied Sites'
+            name='Tungsten Atoms'
         ), row=1, col=1)
-    
-    # Coverage plot
+
+    if len(impurity) > 0:
+        fig.add_trace(go.Scatter3d(
+            x=impurity[:, 0], y=impurity[:, 1], z=impurity[:, 2],
+            mode='markers',
+            marker=dict(size=3, color='red', opacity=0.5),
+            name='Impurities'
+        ), row=1, col=1)
+
     if history['time_steps']:
         fig.add_trace(go.Scatter(
             x=history['time_steps'],
@@ -57,60 +95,62 @@ def plot_lattice(lattice, history):
             name='Coverage',
             line=dict(color='green')
         ), row=1, col=2)
-    
+
     fig.update_layout(
         height=500,
         showlegend=True,
         margin=dict(l=20, r=20, t=40, b=20)
     )
-    
+
     return fig.to_html(full_html=False)
+
 
 def index(request):
     html_plot = None
     result_message = ""
     metrics = {}
-    
+
     if request.method == 'POST':
         form = KMCSimulationForm(request.POST)
         if form.is_valid():
             start_time = time.time()
-            
+
             try:
-                size = int(form.cleaned_data['lattice_size'])
-                steps = int(form.cleaned_data['steps'])
-                temperature = float(form.cleaned_data['temperature'])
-                
-                # Validate inputs
-                if size <= 0 or steps <= 0 or temperature < 0:
-                    raise ValueError("All values must be positive")
-                
-                lattice, history = simulate_kmc(size, steps, temperature)
+                size = form.cleaned_data['lattice_size']
+                steps = form.cleaned_data['steps']
+                temperature = form.cleaned_data['temperature']
+                impurity_concentration = form.cleaned_data['impurity_concentration']
+
+                lattice, history = simulate_kmc(size, steps, temperature, impurity_concentration)
                 html_plot = plot_lattice(lattice, history)
-                
+
                 execution_time = time.time() - start_time
                 occupied = np.sum(lattice == 1)
-                total_sites = size**3
-                
+                impurities = np.sum(lattice == 2)
+                total_sites = size ** 3
+
                 result_message = (
                     f"Simulation completed in {execution_time:.2f} seconds\n"
-                    f"Occupied sites: {occupied}/{total_sites} ({occupied/total_sites*100:.1f}%)\n"
-                    f"Final coverage: {history['coverage'][-1]*100:.1f}%"
+                    f"Occupied sites: {occupied}/{total_sites} ({occupied / total_sites * 100:.1f}%)\n"
+                    f"Impurity sites: {impurities} ({impurities / total_sites * 100:.2f}%)\n"
+                    f"Final coverage: {history['coverage'][-1] * 100:.1f}%"
                 )
-                
+
                 metrics = {
-                    'time': f"{execution_time:.2f}s",
-                    'size': f"{size}×{size}×{size}",
+                    'execution_time': f"{execution_time:.2f}s",
+                    'lattice_size': f"{size}",
                     'steps': steps,
-                    'temperature': f"{temperature}K",
-                    'coverage': f"{history['coverage'][-1]*100:.1f}%"
+                    'temperature': f"{temperature}",
+                    'coverage_A': f"{history['coverage'][-1] * 100:.1f}%",
+                    'coverage_B': f"{impurities / total_sites * 100:.2f}%",
+                    'reactions': f"{steps}"
                 }
-                
+
             except Exception as e:
                 result_message = f"Error: {str(e)}"
     else:
         form = KMCSimulationForm()
-    
+
     return render(request, 'simulation/index.html', {
         'form': form,
         'plot': html_plot,
