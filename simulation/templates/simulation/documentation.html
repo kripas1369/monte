@@ -1,0 +1,57 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documentation - Crystal Growth Simulation</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <style>
+        .gradient-header {
+            background: linear-gradient(to right, #3b82f6, #8b5cf6);
+        }
+        .card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+    <nav class="gradient-header text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Crystal Growth Simulation</h1>
+            <a href="{% url 'index' %}" class="text-white hover:text-gray-200 transition duration-200">Back to Simulation</a>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-6 py-10 flex-grow">
+        <h1 class="text-4xl font-extrabold mb-8 text-center text-gray-800">Nucleation Functions Documentation</h1>
+        <div class="card p-6">
+            <h2 class="text-2xl font-bold mb-4">1. compute_undercooling(T_m, T)</h2>
+            <p><strong>Formula:</strong> ΔT = Tₘ − T</p>
+            <p><strong>Description:</strong> Calculates the undercooling as the difference between the melting temperature (Tₘ) and the current temperature (T).</p>
+
+            <h2 class="text-2xl font-bold mb-4 mt-6">2. compute_volume_energy(delta_T)</h2>
+            <p><strong>Formula:</strong> ΔGᵥ = (L * ΔT) / Tₘ</p>
+            <p><strong>Description:</strong> Computes the volume free energy change based on the undercooling, latent heat (L), and melting temperature.</p>
+
+            <h2 class="text-2xl font-bold mb-4 mt-6">3. compute_critical_radius(delta_Gv)</h2>
+            <p><strong>Formula:</strong> r* = (2 * γ) / ΔGᵥ</p>
+            <p><strong>Description:</strong> Calculates the critical radius for nucleation using the surface energy (γ) and volume free energy change.</p>
+
+            <h2 class="text-2xl font-bold mb-4 mt-6">4. compute_nucleation_barriers(delta_T)</h2>
+            <p><strong>Formula:</strong> ΔGₕₒₘₒ = (16 * π * γ³) / (3 * ΔGᵥ²), ΔGₕₑₜₑᵣₒ = f(θ) * ΔGₕₒₘₒ</p>
+            <p><strong>Description:</strong> Computes homogeneous and heterogeneous nucleation barriers, accounting for the contact angle factor f(θ).</p>
+
+            <h2 class="text-2xl font-bold mb-4 mt-6">5. compute_nucleation_probability(delta_G, T)</h2>
+            <p><strong>Formula:</strong> P = exp(-ΔG / (k_B * T))</p>
+            <p><strong>Description:</strong> Calculates the probability of nucleation based on the nucleation barrier and temperature.</p>
+        </div>
+    </div>
+
+    <footer class="bg-gray-800 text-white text-center py-4">
+        <p>&copy; 2025 Crystal Growth Simulation. All rights reserved.</p>
+    </footer>
+</body>
+</html>
