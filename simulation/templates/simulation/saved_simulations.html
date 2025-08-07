@@ -1,0 +1,204 @@
+{% load crispy_forms_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Saved Simulations</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <style>
+        .gradient-header {
+            background: linear-gradient(to right, #3b82f6, #8b5cf6);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .glass-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .btn-danger {
+            background: linear-gradient(to right, #ef4444, #b91c1c);
+            transition: all 0.3s ease;
+        }
+        .btn-danger:hover {
+            background: linear-gradient(to right, #b91c1c, #991b1b);
+            transform: scale(1.05);
+        }
+        .btn-toggle {
+            background: linear-gradient(to right, #3b82f6, #6b7280);
+            transition: all 0.3s ease;
+        }
+        .btn-toggle:hover {
+            background: linear-gradient(to right, #2563eb, #4b5563);
+            transform: scale(1.05);
+        }
+        .sidebar {
+            transition: width 0.3s ease;
+        }
+        .sidebar-closed {
+            width: 4rem;
+        }
+        .sidebar-open {
+            width: 16rem;
+        }
+        .fade-in {
+            animation: fadeIn 1s ease-in-out;
+        }
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .collapsible-content.open {
+            max-height: 1000px; /* Adjust as needed */
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-blue-100 text-gray-900 min-h-screen flex">
+    <div class="sidebar sidebar-closed fixed top-0 left-0 h-full bg-gray-800 text-white flex flex-col items-center py-4" id="sidebar">
+        <button class="text-white mb-4" onclick="toggleSidebar()">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+            </svg>
+        </button>
+        <a href="{% url 'index' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Home</a>
+        <a href="{% url 'documentation' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Documentation</a>
+        <a href="{% url 'saved_simulations' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Saved Simulations</a>
+        <a href="#" class="my-2 text-center w-full hover:bg-gray-700 py-2">About</a>
+    </div>
+
+    <div class="flex-grow pl-16 transition-all duration-300" id="content">
+        <nav class="gradient-header text-white p-4">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-2xl font-bold">Saved Simulations</h1>
+            </div>
+        </nav>
+
+        <div class="container mx-auto px-6 py-10">
+            <h1 class="text-4xl font-extrabold mb-8 text-center text-gray-800">Saved Simulations</h1>
+            {% if messages %}
+            <div class="glass-card mb-6 p-4 text-gray-800">
+                {% for message in messages %}
+                <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if simulations %}
+            <div class="flex flex-col gap-6">
+                {% for sim in simulations %}
+                <div class="glass-card p-6 fade-in">
+                    <h2 class="text-xl font-bold mb-4">
+                        {% if sim.name %}Simulation: {{ sim.name }} (ID: {{ sim.simulation_id }})
+                        {% else %}Simulation {{ sim.simulation_id }}
+                        {% endif %}
+                    </h2>
+                    <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p><strong>Created:</strong> {{ sim.created_at }}</p>
+                            <p><strong>Lattice Size:</strong> {{ sim.lattice_size }}</p>
+                            <p><strong>Steps:</strong> {{ sim.steps }}</p>
+                            <p><strong>Temperature:</strong> {{ sim.temperature }} K</p>
+                        </div>
+                        <div>
+                            <p><strong>Flux:</strong> {{ sim.flux }} ML/s</p>
+                            <p><strong>Impurity Concentration:</strong> {{ sim.impurity_concentration }}</p>
+                            <p><strong>Diffusion X/Y/Z:</strong> {{ sim.diffusion_x }}/{{ sim.diffusion_y }}/{{ sim.diffusion_z }} eV</p>
+                            <p><strong>Impurity Effect:</strong> {{ sim.impurity_effect }} eV</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end mb-4 space-x-2">
+                        <button onclick="toggleLegend('plot-{{ sim.simulation_id }}')" class="btn btn-sm btn-outline">Toggle Legend</button>
+                        <button onclick="setCamera('top', 'plot-{{ sim.simulation_id }}')" class="btn btn-sm btn-outline">Top View</button>
+                        <button onclick="setCamera('side', 'plot-{{ sim.simulation_id }}')" class="btn btn-sm btn-outline">Side View</button>
+                        <button onclick="setCamera('isometric', 'plot-{{ sim.simulation_id }}')" class="btn btn-sm btn-outline">Isometric View</button>
+                        <a href="{% url 'compare_simulation' sim.simulation_id %}" class="btn btn-sm btn-primary text-white">View Comparison</a>
+                        <form method="post" action="{% url 'delete_simulation' %}" onsubmit="return confirm('Are you sure you want to delete Simulation {% if sim.name %}{{ sim.name }} (ID: {{ sim.simulation_id }}){% else %}{{ sim.simulation_id }}{% endif %}?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="simulation_id" value="{{ sim.simulation_id }}">
+                            <button type="submit" class="btn btn-sm btn-danger text-white">Delete</button>
+                        </form>
+                    </div>
+                    <div id="plot-{{ sim.simulation_id }}" class="mb-6">{{ sim.html_plot|safe }}</div>
+                    <!-- Comparison Plots Section -->
+                    <div class="mb-4">
+                        <button onclick="toggleCollapsible('comparison-{{ sim.simulation_id }}')" class="btn btn-sm btn-toggle text-white">Toggle Comparison Plots</button>
+                        <div id="comparison-{{ sim.simulation_id }}" class="collapsible-content mt-4">
+                            <h3 class="font-bold text-blue-600 mb-2">Comparison Plots (Res.pdf Figs. 4.2.3–4.2.7)</h3>
+                            {{ sim.comparison_plot|safe }}
+                        </div>
+                    </div>
+                    <!-- Simulation Evaluation Section -->
+                    <div>
+                        <button onclick="toggleCollapsible('evaluation-{{ sim.simulation_id }}')" class="btn btn-sm btn-toggle text-white">Toggle Simulation Evaluation</button>
+                        <div id="evaluation-{{ sim.simulation_id }}" class="collapsible-content mt-4">
+                            <h3 class="font-bold text-blue-600 mb-2">Simulation Evaluation</h3>
+                            <pre class="text-gray-800 whitespace-pre-wrap">{{ sim.get_simulation_data.comparison_result|default:"No evaluation available." }}</pre>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="glass-card p-6 text-gray-800">
+                <p>No saved simulations found.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <footer class="bg-gray-900 text-white text-center py-4">
+            <p>© 2025 3D Island Formation Simulation.</p>
+        </footer>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            const content = document.getElementById("content");
+            sidebar.classList.toggle("sidebar-closed");
+            sidebar.classList.toggle("sidebar-open");
+            content.classList.toggle("pl-16");
+            content.classList.toggle("pl-64");
+        }
+
+        function toggleLegend(plotId) {
+            const plot = document.getElementById(plotId).getElementsByClassName("js-plotly-plot")[0];
+            Plotly.restyle(plot, { showlegend: !plot.layout.showlegend });
+        }
+
+        function setCamera(direction, plotId) {
+            const plot = document.getElementById(plotId).getElementsByClassName("js-plotly-plot")[0];
+            let camera;
+            switch (direction) {
+                case "top":
+                    camera = { eye: { x: 0, y: 0, z: 2 }, up: { x: 0, y: 0, z: 1 } };
+                    break;
+                case "side":
+                    camera = { eye: { x: 2, y: 0, z: 0 }, up: { x: 0, y: 0, z: 1 } };
+                    break;
+                case "isometric":
+                    camera = { eye: { x: 1.2, y: 1.2, z: 0.8 }, up: { x: 0, y: 0, z: 1 } };
+                    break;
+            }
+            Plotly.relayout(plot, { "scene.camera": camera });
+        }
+
+        function toggleCollapsible(id) {
+            const content = document.getElementById(id);
+            content.classList.toggle("open");
+        }
+    </script>
+</body>
+</html>

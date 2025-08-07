@@ -4,9 +4,12 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Crystal Growth Simulation</title>
+    <title>3D Island Formation Simulation</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" rel="stylesheet" />
     <style>
         .gradient-header {
             background: linear-gradient(to right, #3b82f6, #8b5cf6);
@@ -31,12 +34,13 @@
             background: linear-gradient(to right, #1e40af, #6b21a8);
             transform: scale(1.05);
         }
-        .btn-preset {
+        .btn-save {
+            background: linear-gradient(to right, #10b981, #059669);
             transition: all 0.3s ease;
         }
-        .btn-preset:hover {
+        .btn-save:hover {
+            background: linear-gradient(to right, #059669, #047857);
             transform: scale(1.05);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
         #loading-spinner {
             display: none;
@@ -71,13 +75,14 @@
         </button>
         <a href="{% url 'index' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Home</a>
         <a href="{% url 'documentation' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Documentation</a>
+        <a href="{% url 'saved_simulations' %}" class="my-2 text-center w-full hover:bg-gray-700 py-2">Saved Simulations</a>
         <a href="#" class="my-2 text-center w-full hover:bg-gray-700 py-2">About</a>
     </div>
 
     <div class="flex-grow pl-16 transition-all duration-300" id="content">
         <nav class="gradient-header text-white p-4">
             <div class="container mx-auto flex justify-between items-center">
-                <h1 class="text-2xl font-bold">Crystal Growth Simulation</h1>
+                <h1 class="text-2xl font-bold">3D Island Formation Simulation</h1>
             </div>
         </nav>
 
@@ -86,11 +91,12 @@
 
             {% if plot %}
             <div class="glass-card mb-10 p-6 fade-in">
-                <div class="flex justify-end mb-4">
+                <div class="flex justify-end mb-4 space-x-2">
                     <button onclick="toggleLegend()" class="btn btn-sm btn-outline">Toggle Legend</button>
-                    <button onclick="setCamera('top')" class="btn btn-sm btn-outline mx-2">Top View</button>
-                    <button onclick="setCamera('side')" class="btn btn-sm btn-outline mx-2">Side View</button>
+                    <button onclick="setCamera('top')" class="btn btn-sm btn-outline">Top View</button>
+                    <button onclick="setCamera('side')" class="btn btn-sm btn-outline">Side View</button>
                     <button onclick="setCamera('isometric')" class="btn btn-sm btn-outline">Isometric View</button>
+                    <button id="save-simulation" class="btn btn-sm btn-save text-white">Save Simulation</button>
                 </div>
                 {{ plot|safe }}
             </div>
@@ -99,9 +105,23 @@
             {% if result %}
             <div class="glass-card mb-6 p-4 text-gray-800 whitespace-pre-wrap fade-in">
                 {{ result }}
-                {% if simulation_data %}
-                <a href="{% url 'download_results' %}" class="btn btn-primary text-white mt-2">Download Results</a>
-                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if comparison_result %}
+            <div class="glass-card mb-6 p-4 text-gray-800 whitespace-pre-wrap fade-in">
+                <h3 class="font-bold text-blue-600 mb-2">Simulation Evaluation</h3>
+                {{ comparison_result }}
+            </div>
+            {% endif %}
+
+            {% if messages %}
+            <div class="glass-card mb-6 p-4 text-gray-800">
+                {% for message in messages %}
+                <div class="alert {% if message.tags %}alert-{{ message.tags }}{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
             </div>
             {% endif %}
 
@@ -120,52 +140,58 @@
                     <p class="text-lg text-gray-700">{{ metrics.steps }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-red-600 mb-2">Final Coverage</h3>
-                    <p class="text-lg text-gray-700">{{ metrics.coverage_A }}</p>
+                    <h3 class="font-bold text-red-600 mb-2">Temperature</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.temperature }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-purple-600 mb-2">Impurity %</h3>
-                    <p class="text-lg text-gray-700">{{ metrics.coverage_B }}</p>
+                    <h3 class="font-bold text-purple-600 mb-2">Flux</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.flux }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-orange-600 mb-2">Nucleation Events</h3>
+                    <h3 class="font-bold text-orange-600 mb-2">Final Coverage</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.coverage }}</p>
+                </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-teal-600 mb-2">Impurity %</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.impurity_coverage }}</p>
+                </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-pink-600 mb-2">Nucleation Events</h3>
                     <p class="text-lg text-gray-700">{{ metrics.nucleation_events }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-teal-600 mb-2">Total Clusters</h3>
+                    <h3 class="font-bold text-indigo-600 mb-2">Total Islands</h3>
                     <p class="text-lg text-gray-700">{{ metrics.total_clusters }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-pink-600 mb-2">Critical Clusters</h3>
+                    <h3 class="font-bold text-blue-600 mb-2">Critical Islands</h3>
                     <p class="text-lg text-gray-700">{{ metrics.critical_clusters }}</p>
                 </div>
                 <div class="glass-card p-4">
-                    <h3 class="font-bold text-indigo-600 mb-2">Reactions</h3>
-                    <p class="text-lg text-gray-700">{{ metrics.reactions }}</p>
+                    <h3 class="font-bold text-green-600 mb-2">Aspect Ratio x/y</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.aspect_xy }}</p>
+                </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-yellow-600 mb-2">Aspect Ratio x/z</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.aspect_xz }}</p>
+                </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-red-600 mb-2">Aspect Ratio y/z</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.aspect_yz }}</p>
+                </div>
+                <div class="glass-card p-4">
+                    <h3 class="font-bold text-purple-600 mb-2">Relative Width Distribution</h3>
+                    <p class="text-lg text-gray-700">{{ metrics.relative_width_distribution }}</p>
                 </div>
             </div>
             {% endif %}
 
             <div class="glass-card max-w-lg mx-auto p-6 mb-6">
-                <form id="kmc-form" method="post" class="space-y-6">
+                <form id="simulation-form" method="post" class="space-y-6">
                     {% csrf_token %}
                     {{ form|crispy }}
-                    <button type="submit" class="w-full py-3 px-6 btn-primary text-white font-semibold rounded-lg">
-                        Run Simulation
-                    </button>
+                    <button type="submit" class="w-full py-3 px-6 btn-primary text-white font-semibold rounded-lg">Run Simulation</button>
                 </form>
-
-                <div class="mt-6 flex justify-center gap-4">
-                    <button type="button" onclick="applyPreset('catalyst')" class="btn btn-secondary px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded">
-                        Catalyst
-                    </button>
-                    <button type="button" onclick="applyPreset('high-temp')" class="btn btn-secondary px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white">
-                        High Temp
-                    </button>
-                    <button type="button" onclick="applyPreset('sweep')" class="btn btn-secondary px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white">
-                        Temp Sweep
-                    </button>
-                </div>
 
                 <div id="loading-spinner" class="flex justify-center mt-6">
                     <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -183,74 +209,84 @@
         </div>
 
         <footer class="bg-gray-900 text-white text-center py-4">
-            <p>© 2025 Crystal Growth Simulation.</p>
+            <p>© 2025 3D Island Formation Simulation.</p>
         </footer>
 
         <script>
-            const form = document.getElementById('kmc-form');
-            const spinner = document.getElementById('loading-spinner');
-            const progressContainer = document.getElementById('progress-container');
-            const progressBar = document.getElementById('progress');
+            const form = document.getElementById("simulation-form");
+            const spinner = document.getElementById("loading-spinner");
+            const progressContainer = document.getElementById("progress-container");
+            const progressBar = document.getElementById("progress");
+            const saveButton = document.getElementById("save-simulation");
 
-            form.addEventListener('submit', () => {
-                spinner.style.display = 'flex';
-                progressContainer.style.display = 'block';
+            form.addEventListener("submit", () => {
+                spinner.style.display = "flex";
+                progressContainer.style.display = "block";
                 let progress = 0;
                 const interval = setInterval(() => {
-                    progress += 10;
+                    progress += 20;
                     progressBar.style.width = `${Math.min(progress, 100)}%`;
                     if (progress >= 100) clearInterval(interval);
-                }, 500);
+                }, 200);
             });
 
+            if (saveButton) {
+                saveButton.addEventListener("click", () => {
+                    $.ajax({
+                        url: "{% url 'save_simulation' %}",
+                        type: "POST",
+                        data: {
+                            csrfmiddlewaretoken: "{{ csrf_token }}"
+                        },
+                        success: function(response) {
+                            Toastify({
+                                text: response.message,
+                                duration: 3000,
+                                backgroundColor: response.status === "success" ? "#10b981" : "#ef4444",
+                                position: "center"
+                            }).showToast();
+                        },
+                        error: function(xhr, status, error) {
+                            Toastify({
+                                text: "Error saving simulation: " + error,
+                                duration: 3000,
+                                backgroundColor: "#ef4444",
+                                position: "center"
+                            }).showToast();
+                        }
+                    });
+                });
+            }
+
             function toggleSidebar() {
-                const sidebar = document.getElementById('sidebar');
-                const content = document.getElementById('content');
-                sidebar.classList.toggle('sidebar-closed');
-                sidebar.classList.toggle('sidebar-open');
-                content.classList.toggle('pl-16');
-                content.classList.toggle('pl-64');
+                const sidebar = document.getElementById("sidebar");
+                const content = document.getElementById("content");
+                sidebar.classList.toggle("sidebar-closed");
+                sidebar.classList.toggle("sidebar-open");
+                content.classList.toggle("pl-16");
+                content.classList.toggle("pl-64");
             }
 
             function toggleLegend() {
-                const plot = document.getElementsByClassName('js-plotly-plot')[0];
+                const plot = document.getElementsByClassName("js-plotly-plot")[0];
                 Plotly.restyle(plot, { showlegend: !plot.layout.showlegend });
             }
 
             function setCamera(direction) {
-                const plot = document.getElementsByClassName('js-plotly-plot')[0];
+                const plot = document.getElementsByClassName("js-plotly-plot")[0];
                 let camera;
                 switch (direction) {
-                    case 'top':
+                    case "top":
                         camera = { eye: { x: 0, y: 0, z: 2 }, up: { x: 0, y: 0, z: 1 } };
                         break;
-                    case 'side':
+                    case "side":
                         camera = { eye: { x: 2, y: 0, z: 0 }, up: { x: 0, y: 0, z: 1 } };
                         break;
-                    case 'isometric':
+                    case "isometric":
                         camera = { eye: { x: 1.2, y: 1.2, z: 0.8 }, up: { x: 0, y: 0, z: 1 } };
                         break;
                 }
-                Plotly.relayout(plot, { 'scene.camera': camera });
-            }
-
-            function applyPreset(type) {
-                if (!form) return;
-                if (type === 'catalyst') {
-                    document.getElementById('id_lattice_size').value = 15;
-                    document.getElementById('id_steps').value = 5000;
-                    document.getElementById('id_temperature').value = 900;
-                    document.getElementById('id_impurity_concentration').value = 0.01;
-                    document.getElementById('id_run_sweep').checked = false;
-                } else if (type === 'high-temp') {
-                    document.getElementById('id_lattice_size').value = 20;
-                    document.getElementById('id_steps').value = 10000;
-                    document.getElementById('id_temperature').value = 1200;
-                    document.getElementById('id_impurity_concentration').value = 0.02;
-                    document.getElementById('id_run_sweep').checked = false;
-                } else if (type === 'sweep') {
-                    document.getElementById('id_run_sweep').checked = true;
-                }
+                Plotly.relayout(plot, { "scene.camera": camera });
             }
         </script>
     </body>
